@@ -11,123 +11,108 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Serveur',
-      home: ServerManager(),
+      home: MyHomePage(),
     );
   }
 }
 
-class ServerManager extends StatefulWidget {
+class MyHomePage extends StatefulWidget {
   @override
-  _ServerManagerState createState() => _ServerManagerState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _ServerManagerState extends State<ServerManager> {
-  late ServerSocket _serverSocket;
-  bool _isServerRunning = false;
-  String _encryptedMessage = '';
-  String _decryptedMessage = '';
-  String _clientConnection = ''; // Ajout de cette variable
+class _MyHomePageState extends State<MyHomePage> {
+  final TextEditingController _idController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _surnameController = TextEditingController();
+  final TextEditingController _birthdateController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final String _ipAddress = '192.168.1.10';
+  final int _port = 12345;
 
-  @override
-  void initState() {
-    super.initState();
-    _startServer();
-  }
-
-  Future<void> _startServer() async {
+  void _sendMessage(String message) async {
     try {
-      _serverSocket = await ServerSocket.bind('0.0.0.0', 12345);
-      setState(() {
-        print('Serveur démarré. En attente de connexion...');
-      });
-      print('Serveur démarré. En attente de connexion...');
-      setState(() {
-        _isServerRunning = true;
-      });
-      _serverSocket.listen((Socket clientSocket) {
-        setState(() {
-          _clientConnection =
-              'Client connecté: ${clientSocket.remoteAddress.address}:${clientSocket.remotePort}';
-        });
-
-        print(
-            'Client connecté: ${clientSocket.remoteAddress.address}:${clientSocket.remotePort}');
-        clientSocket.listen((List<int> data) async {
-          String message = utf8.decode(data);
-
-          // Vérifier si le message est crypté
-          bool isEncrypted = message.startsWith('ENCRYPTED:');
-          if (isEncrypted) {
-            setState(() {
-              _encryptedMessage = message;
-              _decryptedMessage =
-                  _decryptMessage(message.substring('ENCRYPTED:'.length));
-            });
-          } else {
-            setState(() {
-              _encryptedMessage = '';
-              _decryptedMessage = message;
-            });
-          }
-        });
-      });
+      Socket socket = await Socket.connect(_ipAddress, _port);
+      socket.write(message);
+      socket.close();
     } catch (e) {
-      print('Erreur lors du démarrage du serveur: $e');
+      print('Erreur lors de l\'envoi du message: $e');
     }
   }
 
-  String _decryptMessage(String encryptedMessage) {
-    final privateKey = encrypt.Key.fromUtf8(
-        '01234567890123456789012345678901'); // Clé privée de 32 caractères
+  String _encryptMessage(String message) {
+    final publicKey = encrypt.Key.fromUtf8(
+        '01234567890123456789012345678901'); // Clé publique de 32 caractères
     final iv = encrypt.IV.fromUtf8('0123456789012345'); // IV de 16 caractères
-    final encrypter = encrypt.Encrypter(encrypt.AES(privateKey));
-    final decrypted = encrypter.decrypt64(encryptedMessage, iv: iv);
-    return decrypted;
+    final encrypter = encrypt.Encrypter(encrypt.AES(publicKey));
+    final encrypted = encrypter.encrypt(message, iv: iv);
+    return 'ENCRYPTED:${encrypted.base64}';
   }
 
-  @override
-  void dispose() {
-    if (_isServerRunning) {
-      _serverSocket.close();
-    }
-    super.dispose();
+  void _sendClearMessage() {
+    Map<String, String> data = {
+      'id': _idController.text,
+      'name': _nameController.text,
+      'surname': _surnameController.text,
+      'birthdate': _birthdateController.text,
+      'phone': _phoneController.text,
+    };
+    String jsonMessage = jsonEncode(data);
+    _sendMessage(jsonMessage);
+  }
+
+  void _sendEncryptedMessage() {
+    Map<String, String> data = {
+      'id': _idController.text,
+      'name': _nameController.text,
+      'surname': _surnameController.text,
+      'birthdate': _birthdateController.text,
+      'phone': _phoneController.text,
+    };
+    String jsonMessage = jsonEncode(data);
+    String encryptedMessage = _encryptMessage(jsonMessage);
+    _sendMessage(encryptedMessage);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Serveur')),
+      appBar: AppBar(
+        title: Text('Client'),
+      ),
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(height: 20),
-            Text(
-              'Serveur a demarrer en attente de connexion',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            TextField(
+              controller: _idController,
+              decoration: InputDecoration(labelText: 'ID'),
             ),
-
-            SizedBox(height: 10),
-            Text(_clientConnection), // Affichage de la connexion client
-
-            SizedBox(height: 20),
-            Text(
-              'Message reçu en clair:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            TextField(
+              controller: _nameController,
+              decoration: InputDecoration(labelText: 'Nom'),
             ),
-
-            SizedBox(height: 10),
-            Text(_decryptedMessage),
-
-            SizedBox(height: 20),
-            Text(
-              'Message reçu encrypté:',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            TextField(
+              controller: _surnameController,
+              decoration: InputDecoration(labelText: 'Prénom'),
             ),
-            SizedBox(height: 10),
-            Text(_encryptedMessage),
+            TextField(
+              controller: _birthdateController,
+              decoration: InputDecoration(labelText: 'Date de naissance'),
+            ),
+            TextField(
+              controller: _phoneController,
+              decoration: InputDecoration(labelText: 'Téléphone'),
+            ),
+            ElevatedButton(
+              onPressed: _sendClearMessage,
+              child: Text('Envoyer en clair'),
+            ),
+            ElevatedButton(
+              onPressed: _sendEncryptedMessage,
+              child: Text('Envoyer encrypté'),
+            ),
           ],
         ),
       ),
